@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 뉴스 결과</title>
+    <style>
+        body { font-family: '맑은 고딕', sans-serif; line-height: 1.6; width: 50%; margin: 0 auto; color: #333; }
+        h1 { text-align: center; font-size: 2.2em; margin-bottom: 40px; color: #2c3e50; }
+        .article { 
+            margin-bottom: 20px; 
+            padding: 15px; 
+            border: 1px solid #e0e0e0; 
+            border-radius: 8px; 
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            cursor: grab;
+        }
+        .article.processing {
+            background-color: #f8f9fa;
+            border-style: dashed;
+            position: relative;
+        }
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+        .article:hover .delete-btn {
+            opacity: 1;
+        }
+        .delete-btn:hover {
+            background-color: rgba(220, 53, 69, 0.2);
+        }
+        .article-url {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #16a085;
+            border-top: 2px solid #f3f3f3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .article:active {
+            cursor: grabbing;
+        }
+        .article:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .article-title { 
+            font-size: 1.5em; 
+            color: #2980b9; 
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .article-title span { font-size: 0.9em; color: #7f8c8d; }
+        .article-url a { color: #16a085; text-decoration: none; }
+        .article-url a:hover { text-decoration: underline; }
+        .article-content { font-size: 1.1em; color: #2c3e50; }
+        .sortable-ghost {
+            opacity: 0.5;
+            background: #f8f9fa;
+        }
+        .sortable-chosen {
+            background: #f1f8ff;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .copy-btn {
+            padding: 8px 16px;
+            background-color: #16a085;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .copy-btn:hover {
+            background-color: #1abc9c;
+        }
+        .copy-btn.copied {
+            background-color: #27ae60;
+        }
+        /* 오버레이 스타일 */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 8px solid #16a085;
+            border-top: 8px solid #f3f3f3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="controls">
+    <button class="copy-btn" onclick="copyArticles()">
+        <span>페이지 복사</span>
+        <span class="copy-icon">📋</span>
+    </button>
+</div>
+
+<div id="articles-container"></div>
+
+<div class="overlay" id="loading-overlay">
+    <div class="spinner"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script>
+    const eventSource = new EventSource("/result_stream");
+    const overlay = document.getElementById("loading-overlay");
+    const articlesContainer = document.getElementById("articles-container");
+    let articles = [];
+    let processingArticles = new Map();
+
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        overlay.style.display = "none";
+
+        if (data.status === 'processing') {
+            // 처리 중인 상태 표시
+            const articleElement = document.createElement("div");
+            articleElement.className = "article processing";
+            articleElement.innerHTML = `
+                <div class="article-url">
+                    <a href="${data.url}" target="_blank">${data.url}</a>
+                    <div class="loading-spinner"></div>
+                </div>
+            `;
+            articlesContainer.appendChild(articleElement);
+            processingArticles.set(data.url, articleElement);
+        } else if (data.status === 'completed') {
+            // 처리 완료된 결과 표시
+            const articleElement = processingArticles.get(data.url) || document.createElement("div");
+            articleElement.className = "article";
+            articleElement.innerHTML = `
+                <button class="delete-btn" onclick="this.closest('.article').remove()">×</button>
+                <div class="article-title">
+                    ${data.title} <span>(${data.date})</span>
+                </div>
+                <div class="article-url">
+                    <a href="${data.url}" target="_blank">${data.url}</a>
+                </div>
+                <div class="article-content">
+                    ${data.content}
+                </div>
+            `;
+            if (!processingArticles.has(data.url)) {
+                articlesContainer.appendChild(articleElement);
+            }
+            processingArticles.delete(data.url);
+            articles.push(data);
+        }
+    };
+
+    eventSource.onerror = function() {
+        console.log("SSE 연결이 종료되었습니다.");
+        eventSource.close();
+        overlay.style.display = "none";
+    };
+
+    // Sortable.js 초기화
+    new Sortable(articlesContainer, {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        onEnd: function(event) {
+            console.log(`Moved item from index ${event.oldIndex} to ${event.newIndex}`);
+        }
+    });
+
+    function copyArticles() {
+        // 삭제 버튼을 제외한 HTML 생성
+        const articlesHTML = Array.from(articlesContainer.children).map(article => {
+            const clone = article.cloneNode(true);
+            const deleteBtn = clone.querySelector('.delete-btn');
+            if (deleteBtn) {
+                deleteBtn.remove();
+            }
+            return clone.outerHTML;
+        }).join('');
+
+        // 현재 페이지의 스타일과 내용을 포함한 HTML 생성
+        const htmlContent = `
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 뉴스 결과</title>
+    <style>
+        ${document.querySelector('style').textContent}
+    </style>
+</head>
+<body>
+    <div id="articles-container">
+        ${articlesHTML}
+    </div>
+</body>
+</html>`;
+
+        // HTML을 클립보드에 복사
+        navigator.clipboard.writeText(htmlContent).then(() => {
+            const copyBtn = document.querySelector('.copy-btn');
+            copyBtn.classList.add('copied');
+            copyBtn.innerHTML = '<span>복사 완료!</span><span class="copy-icon">✓</span>';
+            
+            setTimeout(() => {
+                copyBtn.classList.remove('copied');
+                copyBtn.innerHTML = '<span>페이지 복사</span><span class="copy-icon">📋</span>';
+            }, 2000);
+        });
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>뉴스 URL 입력</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: '맑은 고딕', sans-serif;
+            background-color: #f0f0f0;
+        }
+
+        .form-container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 700px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        h3 {
+            text-align: center;
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .tooltip-icon {
+            color: #007BFF;
+            cursor: pointer;
+            position: relative;
+            display: inline-block;
+            margin-left: 5px;
+        }
+
+        .tooltip-text {
+            visibility: hidden;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            padding: 5px;
+            border-radius: 4px;
+            position: absolute;
+            z-index: 1;
+            bottom: 150%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 0.85rem;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip-icon:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .file-upload-container {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .file-upload-container.ready {
+            border-color: #28a745;
+            background-color: #f8fff9;
+        }
+
+        .file-upload-container.ready::before {
+            content: "✓";
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background-color: #28a745;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .file-upload-container:hover {
+            border-color: #007BFF;
+            background-color: #f8f9fa;
+        }
+
+        .file-upload-container.ready:hover {
+            border-color: #28a745;
+            background-color: #f8fff9;
+        }
+
+        .file-upload-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .file-upload-text {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .file-name {
+            margin-top: 10px;
+            color: #28a745;
+            font-weight: bold;
+            display: none;
+        }
+
+        .file-name.show {
+            display: block;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        button[type="submit"] {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button[type="submit"]:hover {
+            background-color: #218838;
+        }
+
+        .error-message {
+            color: #dc3545;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="form-container">
+    <h1>
+        뉴스 URL 입력
+        <span class="tooltip-icon">📢
+            <span class="tooltip-text">aitimes.com, aitimes.kr, venturebeat.com, techcrunch.com, zdnet.co.kr</span>
+        </span>
+    </h1>
+
+    <form id="urlForm" action="/result" method="post" enctype="multipart/form-data">
+        <div class="file-upload-container" id="drop-zone">
+            <div class="file-upload-icon">📄</div>
+            <div class="file-upload-text">CSV 파일을 드래그하거나 클릭하여 업로드하세요</div>
+            <div class="file-name" id="file-name"></div>
+            <input type="file" id="file-input" name="file" accept=".csv">
+        </div>
+        <div class="error-message" id="error-message"></div>
+        <button type="submit">전송</button>
+    </form>
+</div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileName = document.getElementById('file-name');
+    const errorMessage = document.getElementById('error-message');
+
+    // 파일 드래그 앤 드롭 이벤트
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            // DataTransfer 객체를 FileList로 변환하여 fileInput에 설정
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(files[0]);
+            fileInput.files = dataTransfer.files;
+            handleFile(files[0]);
+        }
+    });
+
+    // 클릭으로 파일 선택
+    dropZone.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFile(e.target.files[0]);
+        }
+    });
+
+    function handleFile(file) {
+        // 파일 타입 체크 개선
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            errorMessage.textContent = 'CSV 파일만 업로드 가능합니다.';
+            errorMessage.style.display = 'block';
+            dropZone.classList.remove('ready');
+            return;
+        }
+
+        const reader = new FileReader();
+        
+        reader.onerror = () => {
+            errorMessage.textContent = '파일을 읽는 중 오류가 발생했습니다.';
+            errorMessage.style.display = 'block';
+            dropZone.classList.remove('ready');
+        };
+
+        reader.onload = (e) => {
+            try {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                const urls = lines.map(line => line.trim()).filter(line => line);
+                
+                // URL 유효성 검사
+                const validUrls = urls.filter(url => {
+                    return url.includes('aitimes.com') || 
+                           url.includes('aitimes.kr') || 
+                           url.includes('venturebeat.com') || 
+                           url.includes('techcrunch.com') || 
+                           url.includes('zdnet.co.kr');
+                });
+
+                if (validUrls.length === 0) {
+                    errorMessage.textContent = '지원하는 URL이 없습니다.';
+                    errorMessage.style.display = 'block';
+                    dropZone.classList.remove('ready');
+                    return;
+                }
+
+                errorMessage.style.display = 'none';
+                fileName.textContent = `✓ ${file.name} (${validUrls.length}개의 URL)`;
+                fileName.classList.add('show');
+                dropZone.classList.add('ready');
+            } catch (error) {
+                errorMessage.textContent = '파일 내용을 처리하는 중 오류가 발생했습니다.';
+                errorMessage.style.display = 'block';
+                dropZone.classList.remove('ready');
+            }
+        };
+
+        try {
+            reader.readAsText(file);
+        } catch (error) {
+            errorMessage.textContent = '파일을 읽는 중 오류가 발생했습니다.';
+            errorMessage.style.display = 'block';
+            dropZone.classList.remove('ready');
+        }
+    }
+
+    // 폼 제출 전 유효성 검사
+    document.getElementById('urlForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if (!fileInput.files.length) {
+            errorMessage.textContent = '파일을 선택해주세요.';
+            errorMessage.style.display = 'block';
+            return;
+        }
+
+        const file = fileInput.files[0];
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            errorMessage.textContent = 'CSV 파일만 업로드 가능합니다.';
+            errorMessage.style.display = 'block';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/result', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                window.location.href = '/result_page';
+            } else {
+                const errorData = await response.text();
+                console.error('서버 응답:', errorData);
+                errorMessage.textContent = '파일 업로드 중 오류가 발생했습니다.';
+                errorMessage.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('업로드 에러:', error);
+            errorMessage.textContent = '서버 연결 중 오류가 발생했습니다.';
+            errorMessage.style.display = 'block';
+        }
+    });
+</script>
+
+</body>
+</html>
