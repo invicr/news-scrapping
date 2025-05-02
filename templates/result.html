@@ -17,6 +17,9 @@
             transition: all 0.3s ease;
             position: relative;
             cursor: grab;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-all;
         }
         .article.processing {
             background-color: #f8f9fa;
@@ -51,6 +54,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            margin-bottom: 10px;
         }
         .loading-spinner {
             width: 16px;
@@ -71,13 +75,36 @@
             color: #2980b9; 
             margin-bottom: 10px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
         }
-        .article-title span { font-size: 0.9em; color: #7f8c8d; }
+        .article-title span { 
+            font-size: 0.9em; 
+            color: #7f8c8d; 
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
         .article-url a { color: #16a085; text-decoration: none; }
         .article-url a:hover { text-decoration: underline; }
-        .article-content { font-size: 1.1em; color: #2c3e50; }
+        .article-content { 
+            font-size: 1.1em; 
+            color: #2c3e50; 
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-all;
+            margin: 0;
+            padding: 0;
+        }
+        .article-content pre {
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-all;
+            font-family: inherit;
+            margin: 0;
+            padding: 0;
+        }
         .sortable-ghost {
             opacity: 0.5;
             background: #f8f9fa;
@@ -135,6 +162,17 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        @media print {
+            body {
+                width: 100%;
+                margin: 0;
+                padding: 20px;
+            }
+            .article {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+        }
     </style>
 </head>
 <body>
@@ -183,14 +221,12 @@
             articleElement.innerHTML = `
                 <button class="delete-btn" onclick="this.closest('.article').remove()">×</button>
                 <div class="article-title">
-                    ${data.title} <span>(${data.date})</span>
+                    ${data.title} <span>&nbsp;(${data.date})</span>
                 </div>
                 <div class="article-url">
                     <a href="${data.url}" target="_blank">${data.url}</a>
                 </div>
-                <div class="article-content">
-                    ${data.content}
-                </div>
+                <div class="article-content">${data.content.trim()}</div>
             `;
             if (!processingArticles.has(data.url)) {
                 articlesContainer.appendChild(articleElement);
@@ -227,16 +263,51 @@
             return clone.outerHTML;
         }).join('');
 
-        // 현재 페이지의 스타일과 내용을 포함한 HTML 생성
-        const htmlContent = `
-<!DOCTYPE html>
+        // 메일용 간단 스타일 버전의 HTML 생성
+        const htmlContent = `<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 뉴스 결과</title>
     <style>
-        ${document.querySelector('style').textContent}
+        /* 메일 클라이언트에서 안정적으로 동작하는 기본 스타일 */
+        body {
+            font-family: Arial, '맑은 고딕', sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .article {
+            border: 1px solid #cccccc;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #ffffff;
+        }
+        .article-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2980b9;
+            margin-bottom: 10px;
+        }
+        .article-title span {
+            font-size: 14px;
+            color: #666666;
+            margin-left: 10px;
+        }
+        .article-url {
+            margin-bottom: 10px;
+        }
+        .article-url a {
+            color: #16a085;
+        }
+        .article-content {
+            font-size: 14px;
+            color: #333333;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
