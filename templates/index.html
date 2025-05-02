@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>뉴스 스크래핑</title>
+    <title>카드 뉴스 생성</title>
     <style>
         body {
             font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
@@ -29,7 +29,7 @@
             border: 2px dashed #3498db;
             padding: 20px;
             text-align: center;
-            margin: 20px 0 80px 0;
+            margin: 20px 0;
             border-radius: 8px;
             background-color: #f8f9fa;
             cursor: pointer;
@@ -48,6 +48,54 @@
             color: #666;
             font-size: 14px;
         }
+        .url-count {
+            margin-top: 10px;
+            color: #3498db;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .info-icon {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            width: 24px;
+            height: 24px;
+            background-color: #1428A0;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: help;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .tooltip {
+            position: absolute;
+            right: 50px;
+            top: 20px;
+            background-color: #1428A0;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 200px;
+            display: none;
+            z-index: 1000;
+        }
+        .tooltip:after {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 6px 0 6px 6px;
+            border-style: solid;
+            border-color: transparent #1428A0;
+        }
+        .info-icon:hover + .tooltip {
+            display: block;
+        }
         .submit-btn {
             background-color: #3498db;
             color: white;
@@ -57,9 +105,9 @@
             cursor: pointer;
             font-size: 16px;
             transition: background-color 0.3s ease;
-            position: absolute;
-            right: 20px;
-            bottom: 20px;
+            display: block;
+            margin: 20px auto 0;
+            width: 200px;
         }
         .submit-btn:hover {
             background-color: #2980b9;
@@ -73,19 +121,63 @@
             margin-top: 10px;
             display: none;
         }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(52, 152, 219, 0.3);
+            border-radius: 50%;
+            border-top-color: #3498db;
+            animation: spin 1s ease-in-out infinite;
+        }
+        .loading-text {
+            margin-top: 20px;
+            color: #3498db;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div style="text-align: center;">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">처리 중...</div>
+        </div>
+    </div>
     <div class="container">
-        <h1>뉴스 스크래핑</h1>
+        <h1>뉴스레터 생성기</h1>
+        <div class="info-icon">i</div>
+        <div class="tooltip">
+            <strong>지원하는 사이트:</strong><br>
+            • aitimes.com<br>
+            • venturebeat.com<br>
+            • techcrunch.com<br>
+            • zdnet.co.kr
+        </div>
         <form id="uploadForm" enctype="multipart/form-data">
             <div class="file-upload-container" id="dropZone">
                 <input type="file" id="fileInput" accept=".csv" style="display: none;">
                 <p>CSV 파일을 여기에 끌어다 놓거나 클릭하여 선택하세요</p>
                 <div class="file-name" id="fileName"></div>
+                <div class="url-count" id="urlCount" style="display: none;"></div>
             </div>
             <div class="error-message" id="errorMessage"></div>
-            <button type="submit" class="submit-btn" id="submitBtn" disabled>스크래핑 시작</button>
+            <button type="submit" class="submit-btn" id="submitBtn" disabled>시작</button>
         </form>
     </div>
 
@@ -93,9 +185,11 @@
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const fileName = document.getElementById('fileName');
+        const urlCount = document.getElementById('urlCount');
         const submitBtn = document.getElementById('submitBtn');
         const errorMessage = document.getElementById('errorMessage');
         const form = document.getElementById('uploadForm');
+        const loadingOverlay = document.getElementById('loadingOverlay');
 
         // 파일 선택 처리
         dropZone.addEventListener('click', () => {
@@ -129,6 +223,22 @@
                     fileName.textContent = file.name;
                     submitBtn.disabled = false;
                     errorMessage.style.display = 'none';
+                    
+                    // CSV 파일 내용 읽기
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const text = e.target.result;
+                        const lines = text.split('\n');
+                        const actualUrls = lines.filter(line => {
+                            return line.trim() !== '' && 
+                                   !line.toLowerCase().includes('url') && 
+                                   line.trim().startsWith('http');
+                        });
+                        const urlCount = actualUrls.length;
+                        document.getElementById('urlCount').textContent = `총 ${urlCount}개의 URL이 있습니다.`;
+                        document.getElementById('urlCount').style.display = 'block';
+                    };
+                    reader.readAsText(file);
                 } else {
                     showError('CSV 파일만 업로드 가능합니다.');
                 }
@@ -140,6 +250,7 @@
             errorMessage.style.display = 'block';
             submitBtn.disabled = true;
             fileName.textContent = '';
+            urlCount.style.display = 'none';
         }
 
         // 폼 제출 처리
@@ -156,7 +267,7 @@
 
             try {
                 submitBtn.disabled = true;
-                submitBtn.textContent = '처리 중...';
+                loadingOverlay.style.display = 'flex';
                 
                 const response = await fetch('/result', {
                     method: 'POST',
@@ -169,12 +280,12 @@
                     const error = await response.text();
                     showError(`업로드 실패: ${error}`);
                     submitBtn.disabled = false;
-                    submitBtn.textContent = '스크래핑 시작';
+                    loadingOverlay.style.display = 'none';
                 }
             } catch (error) {
                 showError(`오류 발생: ${error.message}`);
                 submitBtn.disabled = false;
-                submitBtn.textContent = '스크래핑 시작';
+                loadingOverlay.style.display = 'none';
             }
         });
     </script>
