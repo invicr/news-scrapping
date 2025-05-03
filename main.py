@@ -73,28 +73,51 @@ async def result_page(request: Request):
     """result_card.html 페이지 렌더링"""
     try:
         # 모든 뉴스 사이트에서 기사를 스크래핑
-        tasks = []
-        for url in url_list:
-            if "aitimes.com" in url or "aitimes.kr" in url:
-                tasks.append(scrape_aitimes(url))
-            elif "venturebeat.com" in url:
-                tasks.append(scrape_venturebeat(url))
-            elif "techcrunch.com" in url:
-                tasks.append(scrape_techcrunch(url))
-            elif "zdnet.co.kr" in url:
-                tasks.append(scrape_zdnet(url))
+        articles = []
+        batch_size = 5  # 한 번에 처리할 URL 수
         
-        articles = await asyncio.gather(*tasks)
+        # URL을 배치로 나누어 처리
+        for i in range(0, len(url_list), batch_size):
+            batch = url_list[i:i + batch_size]
+            tasks = []
+            
+            for url in batch:
+                if "aitimes.com" in url or "aitimes.kr" in url:
+                    tasks.append(asyncio.wait_for(scrape_aitimes(url), timeout=30))
+                elif "venturebeat.com" in url:
+                    tasks.append(asyncio.wait_for(scrape_venturebeat(url), timeout=30))
+                elif "techcrunch.com" in url:
+                    tasks.append(asyncio.wait_for(scrape_techcrunch(url), timeout=30))
+                elif "zdnet.co.kr" in url:
+                    tasks.append(asyncio.wait_for(scrape_zdnet(url), timeout=30))
+            
+            try:
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+                for result in batch_results:
+                    if isinstance(result, Exception):
+                        print(f"스크래핑 오류: {str(result)}")
+                    else:
+                        articles.append(result)
+            except Exception as e:
+                print(f"배치 처리 중 오류: {str(e)}")
+                continue
+        
+        if not articles:
+            raise HTTPException(status_code=500, detail="스크래핑된 기사가 없습니다.")
         
         # 현재 날짜 포맷팅
-        current_date = datetime.now().strftime("%Y년 %m월 %d일")
-        
+        current_date = datetime.now().strftime("%Y년 %m월 %d일 (%a)")
+        current_date = current_date.replace("Mon", "월").replace("Tue", "화").replace("Wed", "수").replace("Thu", "목").replace("Fri", "금").replace("Sat", "토").replace("Sun", "일")
+        # 현재 연도의 주차 계산
+        current_week = datetime.now().isocalendar()[1]
+        current_week = f"({current_week}주차)"
         return templates.TemplateResponse(
             "result_card.html",
             {
                 "request": request,
                 "articles": articles,
-                "current_date": current_date
+                "current_date": current_date,
+                "current_week": current_week
             }
         )
     except Exception as e:
