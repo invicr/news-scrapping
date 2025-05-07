@@ -261,7 +261,7 @@
                 showError('파일을 선택해주세요.');
                 return;
             }
-
+            
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
 
@@ -273,12 +273,15 @@
                     method: 'POST',
                     body: formData
                 });
-
+                
                 if (response.ok) {
-                    window.location.href = '/result_page';
+                    const html = await response.text();
+                    document.open();
+                    document.write(html);
+                    document.close();
                 } else {
-                    const error = await response.text();
-                    showError(`업로드 실패: ${error}`);
+                    const error = await response.json();
+                    showError(`업로드 실패: ${error.detail || '알 수 없는 오류가 발생했습니다.'}`);
                     submitBtn.disabled = false;
                     loadingOverlay.style.display = 'none';
                 }
